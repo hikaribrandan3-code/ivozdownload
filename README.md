@@ -1,4 +1,4 @@
-# Hikari Yaps ✦
+# iVoz ✦
 
 **Local speech-to-text for macOS. Hold a key, talk, release — polished text appears in any app you're typing in.**
 
@@ -8,8 +8,8 @@ No subscriptions. No API keys. No cloud. Your voice never leaves your Mac. The A
 
 ## Download
 
-1. Download `HikariYaps.zip` from the link above.
-2. Unzip and drag **Hikari Yaps.app** to your `/Applications` folder.
+1. Download `iVoz.zip` from the link above.
+2. Unzip and drag **iVoz.app** to your `/Applications` folder.
 3. Open it.
 
 ---
@@ -19,7 +19,7 @@ No subscriptions. No API keys. No cloud. Your voice never leaves your Mac. The A
 The app will walk you through this on the Home screen:
 
 1. **Microphone** — click **Grant** so it can hear you.
-2. **Accessibility** — click **Open Settings**, go to **Privacy & Security → Accessibility**, add **Hikari Yaps**, and check the box. (If it was already listed, remove it and add it again after reinstalling.)
+2. **Accessibility** — click **Open Settings**, go to **Privacy & Security → Accessibility**, add **iVoz**, and check the box. (If it was already listed, remove it and add it again after reinstalling.)
 3. **Model download** — wait for the speech model to download (~145 MB, one-time). A "Ready" pill appears when it's done.
 4. **Smart Cleanup** (optional, on by default) — downloads a ~1 GB local grammar model on first use. Progress shows under the Smart Cleanup card.
 
@@ -65,7 +65,7 @@ That's it. You're fully offline after that.
 
 ## Privacy
 
-Everything runs locally. No audio is sent to any server. No account needed. No telemetry. Your transcriptions are stored only on your Mac in `~/Library/Application Support/HikariYaps/`.
+Everything runs locally. No audio is sent to any server. No account needed. No telemetry. Your transcriptions are stored only on your Mac in `~/Library/Application Support/iVoz/`.
 
 ---
 
@@ -75,4 +75,4 @@ Click **Update** in the left sidebar of the app to rebuild from the latest sourc
 
 ---
 
-*Built with Swift, WhisperKit, and llama.cpp. Inspired by Chirp — rebuilt to be free, offline, and yours.*
+*Built with Swift, WhisperKit, and llama.cpp. Inspired by Whispr Flow — rebuilt to be free, offline, and yours.*
