@@ -5,9 +5,9 @@ final class TrialManager: ObservableObject {
     static let shared = TrialManager()
 
     @Published var wordCount = 0
-    @Published var monthlyLimit = 3500
+    @Published var monthlyLimit = Int.max
     @Published var isTrialActive = false
-    @Published var trialDaysRemaining = 5
+    @Published var trialDaysRemaining = 3
     @Published var shouldShowLimitPopup = false
 
     private let userDefaults = UserDefaults.standard
@@ -29,13 +29,10 @@ final class TrialManager: ObservableObject {
         wordCount += count
         userDefaults.set(wordCount, forKey: wordCountKey)
 
-        // The 5-day trial is full access — only enforce the monthly
-        // limit once the trial window has elapsed.
+        // 3-day trial is fully unlimited — only show paywall after trial ends.
         guard !isTrialActive else { return }
 
-        if wordCount >= monthlyLimit {
-            shouldShowLimitPopup = true
-        }
+        shouldShowLimitPopup = true
     }
 
     func startTrial() {
@@ -61,8 +58,8 @@ final class TrialManager: ObservableObject {
         // Check if trial was started
         if let trialStart = userDefaults.object(forKey: trialStartDateKey) as? Date {
             let daysSinceStart = Calendar.current.dateComponents([.day], from: trialStart, to: Date()).day ?? 0
-            isTrialActive = daysSinceStart < 5
-            trialDaysRemaining = max(0, 5 - daysSinceStart)
+            isTrialActive = daysSinceStart < 3
+            trialDaysRemaining = max(0, 3 - daysSinceStart)
         } else if !userDefaults.bool(forKey: hasActivatedTrialKey) {
             // First launch - start trial
             startTrial()
