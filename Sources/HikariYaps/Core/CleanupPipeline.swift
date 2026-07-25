@@ -7,6 +7,9 @@ struct CleanupPipeline {
     var smartFormatting: Bool
     var smartCleanup: Bool
     var tone: ToneStyle
+    /// Whisper language code of the transcript ("en"/"es"/"pt"/…), used to
+    /// gate language-specific filler-word patterns. Defaults to English.
+    var languageCode: String = "en"
 
     /// Convenience entry point: runs the fully deterministic pipeline
     /// (structure + regex cleanup + finish). Used when the local LLM isn't
@@ -91,7 +94,9 @@ struct CleanupPipeline {
 
     // MARK: - Stage 4: Filler words
 
-    private static let fillerPatterns: [String] = [
+    // Filler patterns are language-gated: English hesitations like "um" are
+    // real words in Portuguese ("um carro") and must never be stripped there.
+    private static let englishFillerPatterns: [String] = [
         // English hesitations
         #"\b(?:[Uu]m+|[Uu]h+|[Uu]hm+|[Ee]rm+|[Aa]hm+|[Hh]mm+)\b[,.]?\s*"#,
         // "you know" / "I mean" as comma-delimited asides
@@ -100,14 +105,29 @@ struct CleanupPipeline {
         #"^[Ii] mean,\s*"#,
         // "like" only when comma-delimited on both sides
         #",\s*like,\s*"#,
-        // Spanish hesitations
+    ]
+
+    private static let spanishFillerPatterns: [String] = [
         #"\b[Ee]ste,\s*"#,
         #"\b[Ee]h,\s*"#,
         #"^[Pp]ues,\s*"#,
         #"^[Oo] sea,\s*"#,
-        // Portuguese hesitations
+    ]
+
+    private static let portugueseFillerPatterns: [String] = [
         #"\b[Éé]{2,},?\s*"#,
     ]
+
+    /// Filler patterns for the transcript's language. Unknown languages fall
+    /// back to English-only patterns (never Spanish/Portuguese ones, and never
+    /// the English set's "um" against a language we can't confirm).
+    private static func fillerPatterns(for languageCode: String) -> [String] {
+        switch languageCode {
+        case "es": return spanishFillerPatterns
+        case "pt": return portugueseFillerPatterns
+        default: return englishFillerPatterns
+        }
+    }
 
     private static let doubledFunctionWords = [
         "the", "a", "an", "to", "i", "we", "you", "it", "is", "that", "and", "of", "in",
@@ -116,7 +136,7 @@ struct CleanupPipeline {
 
     private func removeFillerWords(_ input: String) -> String {
         var text = input
-        for pattern in Self.fillerPatterns {
+        for pattern in Self.fillerPatterns(for: languageCode) {
             text = text.replacing(pattern: pattern, with: pattern.hasPrefix(",") ? ", " : "")
         }
         // Collapse doubled function words ("the the" → "the").
@@ -149,20 +169,26 @@ struct CleanupPipeline {
 
     private func capitalizeSentences(_ input: String) -> String {
         guard tone != .code else { return input }
-        var characters = Array(input)
+        // Build the result with String ops — never Character(character.uppercased()):
+        // some characters uppercase to multiple graphemes ("ß"→"SS", "ﬁ"→"FI")
+        // and Character.init traps on those, crashing mid-pipeline.
+        var result = ""
+        result.reserveCapacity(input.count)
         var capitalizeNext = true
-        for index in characters.indices {
-            let character = characters[index]
+        for character in input {
             if capitalizeNext, character.isLetter {
-                characters[index] = Character(character.uppercased())
+                result += character.uppercased()
                 capitalizeNext = false
-            } else if ".!?\n".contains(character) {
-                capitalizeNext = true
-            } else if !character.isWhitespace, character != "\"", character != "'", character != "(" {
-                capitalizeNext = false
+            } else {
+                if ".!?\n".contains(character) {
+                    capitalizeNext = true
+                } else if !character.isWhitespace, character != "\"", character != "'", character != "(" {
+                    capitalizeNext = false
+                }
+                result.append(character)
             }
         }
-        return String(characters)
+        return result
     }
 
     // MARK: - Stage 6: List detection

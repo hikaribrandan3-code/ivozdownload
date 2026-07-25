@@ -37,6 +37,9 @@ final class LocalLLMCleanup: ObservableObject {
     private var loadTask: Task<Void, Never>?
 
     private static let modelFilename = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    /// LLM.swift returns this literal string when a generation is already in
+    /// flight (its `isAvailable` guard), instead of throwing.
+    private static let busySentinel = "LLM is being used"
     private static let modelURL = URL(string: "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf")!
     /// Expected size in bytes (~1.03 GB for Q4_K_M).
     private static let expectedBytes: Int64 = 1_105_000_000
@@ -92,7 +95,10 @@ final class LocalLLMCleanup: ObservableObject {
         if Task.isCancelled { return }
 
         state = .loading
-        guard let model = LLM(from: path, template: .chatML(nil), maxTokenCount: 512) else {
+        // 2048-token context: the previous 512 was exhausted after 1–3
+        // dictations (system prompt + user text + output share the budget),
+        // which silently disabled Smart Cleanup for the rest of the session.
+        guard let model = LLM(from: path, template: .chatML(nil), maxTokenCount: 2048) else {
             state = .failed("Could not load the cleanup model")
             return
         }
@@ -112,7 +118,18 @@ final class LocalLLMCleanup: ObservableObject {
         // Qwen 2.5 ChatML format: <|im_start|> tags with <|im_end|> between turns.
         let prompt = "<|im_start|>system\n\(system)<|im_end|>\n<|im_start|>user\n\(text)<|im_end|>\n<|im_start|>assistant\n"
 
+        // Reset the KV context before every cleanup. LLM.swift appends to the
+        // context on each generation and refuses once it's full — without this
+        // reset, cleanup silently stopped working after a few dictations.
+        // Ordering is safe: reset() enqueues resetContext on the same core
+        // actor that getCompletion uses, so the reset runs first.
+        llm.reset()
+
         let result = await llm.getCompletion(from: prompt)
+        // LLM.swift returns this sentinel (instead of throwing) when a
+        // generation is already in flight — treat it as failure so callers
+        // fall back to the deterministic rules pass instead of injecting it.
+        guard result != Self.busySentinel else { return nil }
         let cleaned = result
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "<|im_end|>", with: "")

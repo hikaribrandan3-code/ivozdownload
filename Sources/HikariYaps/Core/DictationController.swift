@@ -37,6 +37,12 @@ final class DictationController: ObservableObject {
 
     private var maxDurationTimer: Timer?
     private var dismissTask: Task<Void, Never>?
+    /// The transcribe → cleanup → inject pipeline for the most recent
+    /// dictation. Tracked so a second dictation can't start while one is in
+    /// flight (two concurrent pipelines interleave their paste sequences,
+    /// clobber the clipboard, and can inject into the wrong app), and so
+    /// Escape can cancel a pipeline the user no longer wants.
+    private var pipelineTask: Task<Void, Never>?
     private static let maxRecordingSeconds: TimeInterval = 300
 
     /// The app frontmost when the hotkey was pressed — captured at the start
@@ -97,6 +103,10 @@ final class DictationController: ObservableObject {
     func escapePressed() {
         if isRecording {
             cancelDictation()
+        } else if pipelineTask != nil {
+            // A dictation is being transcribed/cleaned/injected — cancel it so
+            // nothing is injected into the target app.
+            cancelPipeline()
         }
     }
 
@@ -104,6 +114,13 @@ final class DictationController: ObservableObject {
 
     func startDictation() {
         guard !isRecording else { return }
+        // Refuse to start while a previous dictation is still being
+        // transcribed/cleaned/injected — two concurrent pipelines interleave
+        // their clipboard/paste sequences and can inject into the wrong app.
+        guard pipelineTask == nil else {
+            showTransient(.notice(L("dictation.busy")))
+            return
+        }
         dismissTask?.cancel()
 
         // Capture the target before any UI (overlay, permission prompts)
@@ -141,7 +158,19 @@ final class DictationController: ObservableObject {
         isRecording = false
         maxDurationTimer?.invalidate()
         recorder.cancel()
+        cancelPipeline()
         overlayPhase = .hidden
+    }
+
+    /// Cancels the in-flight transcribe → cleanup → inject pipeline, if any.
+    /// Cancellation is cooperative: the pipeline checks `Task.isCancelled`
+    /// between stages and before injecting text.
+    private func cancelPipeline() {
+        pipelineTask?.cancel()
+        pipelineTask = nil
+        if case .transcribing = overlayPhase {
+            overlayPhase = .hidden
+        }
     }
 
     func finishDictation() {
@@ -162,18 +191,21 @@ final class DictationController: ObservableObject {
         let target = dictationTarget
         let frontApp = target?.localizedName
 
-        Task {
+        pipelineTask = Task {
+            defer { pipelineTask = nil }
             do {
                 let output = try await engine.transcribe(
                     samples: samples,
                     languageCode: settings.language.whisperCode,
                     vocabulary: vocabulary.words
                 )
+                try Task.checkCancellation()
 
                 let pipeline = CleanupPipeline(
                     smartFormatting: settings.smartFormatting,
                     smartCleanup: settings.smartCleanup,
-                    tone: settings.tone
+                    tone: settings.tone,
+                    languageCode: output.language
                 )
                 let structured = pipeline.structure(output.text, segments: output.segments)
 
@@ -200,6 +232,7 @@ final class DictationController: ObservableObject {
                 // case cleanup rephrased the keyword).
                 if settings.suiteCommands,
                    let intent = SuiteIntents.match(text) ?? SuiteIntents.match(output.text) {
+                    guard !Task.isCancelled else { return }
                     let feedback = SuiteActions.perform(intent)
                     history.add(text: text, rawText: output.text, duration: output.audioDuration, appName: "iSuite")
                     if settings.completionSound {
@@ -209,6 +242,11 @@ final class DictationController: ObservableObject {
                     return
                 }
 
+                // Never inject text the user cancelled while we were working.
+                guard !Task.isCancelled else {
+                    overlayPhase = .hidden
+                    return
+                }
                 let result = await injector.inject(text, method: settings.injectionMethod, target: target)
                 history.add(text: text, rawText: output.text, duration: output.audioDuration, appName: frontApp)
 
@@ -223,9 +261,12 @@ final class DictationController: ObservableObject {
                 switch result {
                 case .injected:
                     showResult(.success(text))
-                case .leftOnClipboard(let reason):
+                case .failed(let reason):
                     showResult(.notice(reason))
                 }
+            } catch is CancellationError {
+                // Deliberate cancel (Escape / new-cancel path) — hide quietly.
+                overlayPhase = .hidden
             } catch {
                 showTransient(.failure(error.localizedDescription))
             }

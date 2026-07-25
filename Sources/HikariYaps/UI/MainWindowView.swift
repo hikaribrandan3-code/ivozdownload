@@ -62,8 +62,6 @@ struct SidebarView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var themeManager: ThemeManager
 
-    @State private var showUpdateSheet = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Brand - Click to toggle light/dark theme (hidden feature)
@@ -95,28 +93,6 @@ struct SidebarView: View {
 
             ForEach([NavSection.home, .vocabulary, .snippets, .suiteCommands]) { section in
                 navButton(section)
-            }
-
-            Button {
-                showUpdateSheet = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .medium))
-                        .frame(width: 22)
-                    Text(L("nav.update"))
-                        .font(.system(size: 14, weight: .regular))
-                    Spacer()
-                }
-                .foregroundStyle(Theme.textTertiary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .sheet(isPresented: $showUpdateSheet) {
-                UpdateSheet()
             }
 
             navButton(.settings)

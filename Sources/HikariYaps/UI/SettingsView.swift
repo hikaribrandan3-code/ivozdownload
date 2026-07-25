@@ -15,7 +15,11 @@ struct SettingsView: View {
     @State private var testLevel: Float = 0
     @State private var isTestingMic = false
     @State private var licenseCode = ""
-    private let testRecorder = AudioRecorder()
+    // Must be a @StateObject: a plain property on a View struct is
+    // re-instantiated every time SwiftUI rebuilds the view, so stopMicTest()
+    // used to call cancel() on a *fresh* recorder while the original engine
+    // kept recording forever (live-mic leak).
+    @StateObject private var micTest = MicTestRecorder()
 
     var body: some View {
         ScrollView {
@@ -242,11 +246,11 @@ struct SettingsView: View {
 
     private func startMicTest() {
         guard !dictation.isRecording else { return }
-        testRecorder.onLevel = { level in
+        micTest.recorder.onLevel = { level in
             testLevel = level
         }
         do {
-            try testRecorder.start(deviceUID: settings.inputDeviceUID)
+            try micTest.recorder.start(deviceUID: settings.inputDeviceUID)
             isTestingMic = true
         } catch {
             testLevel = 0
@@ -254,8 +258,8 @@ struct SettingsView: View {
     }
 
     private func stopMicTest() {
-        guard isTestingMic else { return }
-        testRecorder.cancel()
+        guard isTestingMic || micTest.recorder.isRecording else { return }
+        micTest.recorder.cancel()
         isTestingMic = false
         testLevel = 0
     }
@@ -403,4 +407,14 @@ struct SettingsView: View {
             .card()
         }
     }
+}
+
+
+/// Owns the mic-test recorder as a stable reference across SwiftUI view
+/// re-creation. A plain property on the View struct is re-instantiated on
+/// every rebuild, which leaked a running AVAudioEngine (live-mic leak) —
+/// @StateObject keeps a single instance for the view's lifetime.
+@MainActor
+private final class MicTestRecorder: ObservableObject {
+    let recorder = AudioRecorder()
 }

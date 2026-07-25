@@ -5,7 +5,9 @@ import os
 
 enum InjectionResult {
     case injected
-    case leftOnClipboard(reason: String)
+    /// Injection didn't happen. The user's clipboard was left untouched —
+    /// the transcript is safe in History (see DictationController).
+    case failed(reason: String)
 }
 
 /// Inserts text into whatever app was frontmost when dictation started.
@@ -38,7 +40,7 @@ final class TextInjector {
         // 1. Secure input (password fields) blocks synthetic events entirely.
         if IsSecureEventInputEnabled() {
             logger.notice("blocked: secure event input enabled system-wide, chars=\(text.count, privacy: .public)")
-            return leaveOnClipboard(text, reason: L("injector.secure_field"))
+            return injectionFailed(reason: L("injector.secure_field"))
         }
 
         // 2. Accessibility permission is required for both AX writes and
@@ -46,7 +48,7 @@ final class TextInjector {
         let hasAX = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary)
         if !hasAX {
             logger.notice("blocked: accessibility not trusted, chars=\(text.count, privacy: .public)")
-            return leaveOnClipboard(text, reason: L("injector.accessibility_needed"))
+            return injectionFailed(reason: L("injector.accessibility_needed"))
         }
 
         // 3. Throttle rapid injections.
@@ -61,10 +63,10 @@ final class TextInjector {
         switch await resolveTarget(target) {
         case .targetClosed:
             logger.notice("target app closed before injection, chars=\(text.count, privacy: .public)")
-            return leaveOnClipboard(text, reason: L("injector.target_closed"))
+            return injectionFailed(reason: L("injector.target_closed"))
         case .reactivateFailed:
             logger.notice("could not reactivate target app, chars=\(text.count, privacy: .public)")
-            return leaveOnClipboard(text, reason: L("injector.reactivate_failed"))
+            return injectionFailed(reason: L("injector.reactivate_failed"))
         case .ready(let resolvedTarget):
             return await performInjection(text, method: method, target: resolvedTarget)
         }
@@ -115,7 +117,7 @@ final class TextInjector {
             // Explicit user choice — always Strategy C, no AX/keystroke attempt.
             let ok = await strategyC(text, target: target)
             if ok { logSuccess(text: text, targetBundleID: bundleID, strategy: "C(forced)") }
-            return ok ? .injected : .leftOnClipboard(reason: L("injector.accessibility_needed"))
+            return ok ? .injected : .failed(reason: L("injector.accessibility_needed"))
 
         case .type:
             // Explicit user choice — Strategy B, falling back to C only if B
@@ -128,21 +130,21 @@ final class TextInjector {
                 case .partial(let remaining):
                     let ok = await strategyC(remaining, target: target)
                     if ok { logSuccess(text: text, targetBundleID: bundleID, strategy: "B(forced)+C(remainder)") }
-                    return ok ? .injected : .leftOnClipboard(reason: L("injector.accessibility_needed"))
+                    return ok ? .injected : .failed(reason: L("injector.accessibility_needed"))
                 case .failed:
                     break
                 }
             }
             let ok = await strategyC(text, target: target)
             if ok { logSuccess(text: text, targetBundleID: bundleID, strategy: "C(fallback)") }
-            return ok ? .injected : .leftOnClipboard(reason: L("injector.accessibility_needed"))
+            return ok ? .injected : .failed(reason: L("injector.accessibility_needed"))
 
         case .auto:
             // Paste-only (the original, proven approach that works everywhere).
             // Target is already captured and validated; just paste reliably.
             let ok = await strategyC(text, target: target)
             if ok { logSuccess(text: text, targetBundleID: bundleID, strategy: "C") }
-            return ok ? .injected : .leftOnClipboard(reason: L("injector.accessibility_needed"))
+            return ok ? .injected : .failed(reason: L("injector.accessibility_needed"))
         }
     }
 
@@ -326,10 +328,12 @@ final class TextInjector {
         pasteboard.setString(text, forType: .string)
 
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier else {
-            // Last-line-of-defense check right before pasting. Text stays on
-            // the clipboard for the user — consistent with the leftOnClipboard
-            // contract the caller returns in this case.
-            logger.notice("strategyC: target no longer frontmost, leaving on clipboard")
+            // Last-line-of-defense check right before pasting. We already
+            // overwrote the clipboard above, so restore the user's original
+            // contents — the transcript is safe in History; the user's copied
+            // password/file/text is not replaceable.
+            logger.notice("strategyC: target no longer frontmost, restoring clipboard")
+            restore(saved, to: pasteboard)
             return false
         }
 
@@ -368,10 +372,14 @@ final class TextInjector {
 
     // MARK: - Clipboard helpers
 
-    private func leaveOnClipboard(_ text: String, reason: String) -> InjectionResult {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        return .leftOnClipboard(reason: reason)
+    /// Failure path for refused/failed injections. Deliberately does NOT
+    /// touch the pasteboard: the previous implementation cleared the user's
+    /// clipboard and left the transcript there, permanently destroying
+    /// whatever the user had copied (passwords, file copies). The transcript
+    /// is always recorded in History by DictationController, so the user
+    /// loses nothing and their clipboard stays intact.
+    private func injectionFailed(reason: String) -> InjectionResult {
+        .failed(reason: reason)
     }
 
     private func snapshot(of pasteboard: NSPasteboard) -> [[NSPasteboard.PasteboardType: Data]] {
@@ -402,7 +410,9 @@ final class TextInjector {
     // MARK: - Logging
 
     private func logSuccess(text: String, targetBundleID: String, strategy: String) {
-        let prefix = String(text.prefix(40))
-        logger.notice("injected strategy=\(strategy, privacy: .public) target=\(targetBundleID, privacy: .public) chars=\(text.count, privacy: .public) prefix=\"\(prefix, privacy: .public)\"")
+        // Never log transcript content — dictated text must not end up in the
+        // unified log (readable via `log show`, persists on disk, ships in
+        // sysdiagnose). Metadata only.
+        logger.notice("injected strategy=\(strategy, privacy: .public) target=\(targetBundleID, privacy: .public) chars=\(text.count, privacy: .public)")
     }
 }

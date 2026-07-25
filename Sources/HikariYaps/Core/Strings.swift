@@ -30,7 +30,6 @@ enum Strings {
         "nav.snippets": [.es: "Fragmentos", .en: "Snippets", .pt: "Trechos"],
         "nav.suite_commands": [.es: "Comandos Suite", .en: "Suite Commands", .pt: "Comandos Suite"],
         "nav.settings": [.es: "Preferencias", .en: "Settings", .pt: "Preferências"],
-        "nav.update": [.es: "Actualizar", .en: "Update", .pt: "Atualizar"],
         "sidebar.hold_to_dictate": [.es: "MANTENÉ PARA DICTAR", .en: "HOLD TO DICTATE", .pt: "SEGURE PARA DITAR"],
         "sidebar.tap_to_dictate": [.es: "TOCÁ PARA DICTAR", .en: "TAP TO DICTATE", .pt: "TOQUE PARA DITAR"],
 
@@ -378,10 +377,15 @@ enum Strings {
             .pt: "É necessária permissão de microfone — abra o Hikari Yaps",
         ],
         "dictation.no_speech_detected": [.es: "No se detectó nada", .en: "Didn't catch that", .pt: "Não foi possível entender"],
+        "dictation.busy": [
+            .es: "Todavía procesando el dictado anterior…",
+            .en: "Still finishing the previous dictation…",
+            .pt: "Ainda processando o ditado anterior…",
+        ],
         "injector.secure_field": [
-            .es: "Campo seguro — presioná ⌘V para pegar",
-            .en: "Secure field — press ⌘V to paste",
-            .pt: "Campo seguro — pressione ⌘V para colar",
+            .es: "Campo seguro — transcripción guardada en Historial",
+            .en: "Secure field — transcript saved in History",
+            .pt: "Campo seguro — transcrição salva no Histórico",
         ],
         "injector.accessibility_needed": [
             .es: "Se necesita permiso de accesibilidad — otorgalo en Preferencias",
@@ -389,14 +393,14 @@ enum Strings {
             .pt: "É necessária permissão de acessibilidade — conceda em Preferências",
         ],
         "injector.target_closed": [
-            .es: "La app de destino se cerró — texto copiado al portapapeles",
-            .en: "Target app closed — text copied to clipboard",
-            .pt: "O app de destino foi fechado — texto copiado para a área de transferência",
+            .es: "La app de destino se cerró — transcripción guardada en Historial",
+            .en: "Target app closed — transcript saved in History",
+            .pt: "O app de destino foi fechado — transcrição salva no Histórico",
         ],
         "injector.reactivate_failed": [
-            .es: "No se pudo volver a la app de destino — presioná ⌘V para pegar",
-            .en: "Couldn't switch back to the target app — press ⌘V to paste",
-            .pt: "Não foi possível voltar ao app de destino — pressione ⌘V para colar",
+            .es: "No se pudo volver a la app de destino — transcripción guardada en Historial",
+            .en: "Couldn't switch back to the target app — transcript saved in History",
+            .pt: "Não foi possível voltar ao app de destino — transcrição salva no Histórico",
         ],
     ]
 }
