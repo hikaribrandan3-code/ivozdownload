@@ -116,6 +116,7 @@ enum Strings {
         ],
         "license.code_placeholder": [.es: "Código de activación", .en: "Activation code", .pt: "Código de ativação"],
         "license.activate_button": [.es: "Activar", .en: "Activate", .pt: "Ativar"],
+        "license.upgrade_button": [.es: "Desbloquear Pro", .en: "Unlock Pro", .pt: "Desbloquear Pro"],
         "license.buy_button": [.es: "Comprar iVoz Pro — $9.99", .en: "Buy iVoz Pro — $9.99", .pt: "Comprar iVoz Pro — $9.99"],
         "license.error_empty": [.es: "Ingresá un código", .en: "Enter a code", .pt: "Digite um código"],
         "license.error_invalid": [

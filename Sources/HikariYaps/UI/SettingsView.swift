@@ -67,6 +67,23 @@ struct SettingsView: View {
                 if !license.isActivated {
                     Divider().overlay(Theme.cardStroke).padding(.horizontal, 20)
                     HStack(spacing: 10) {
+                        Link(destination: URL(string: "https://ivoz.vercel.app")!) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(L("license.upgrade_button"))
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(Theme.gold)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+
+                    Divider().overlay(Theme.cardStroke).padding(.horizontal, 20)
+                    HStack(spacing: 10) {
                         TextField(L("license.code_placeholder"), text: $licenseCode)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13, weight: .semibold, design: .monospaced))
